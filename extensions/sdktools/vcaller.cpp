@@ -52,6 +52,11 @@ bool s_has_return = false;
 ValvePassInfo s_return;
 unsigned int s_numparams = 0;
 ValvePassInfo s_params[SP_MAX_EXEC_PARAMS];
+bool s_has_reginfo = false;
+ValveRegInfo s_reginfo;
+ValveRegValues s_regs;
+bool s_has_regreturn = false;
+SDKRegister regreturn;
 
 inline void DecodePassMethod(ValveType vtype, SDKPassMethod method, PassType &type, unsigned int &flags)
 {
@@ -88,6 +93,9 @@ static cell_t StartPrepSDKCall(IPluginContext *pContext, const cell_t *params)
 	s_call_addr = NULL;
 	s_has_return = false;
 	s_vcalltype = (ValveCallType)params[1];
+	s_has_reginfo = false;
+	s_reginfo.Reset();
+	s_has_regreturn = false;
 
 	return 1;
 }
@@ -222,10 +230,21 @@ static cell_t PrepSDKCall_SetFromConf(IPluginContext *pContext, const cell_t *pa
 static cell_t PrepSDKCall_SetReturnInfo(IPluginContext *pContext, const cell_t *params)
 {
 	s_has_return = true;
+	s_has_regreturn = false;
 	s_return.vtype = (ValveType)params[1];
 	DecodePassMethod(s_return.vtype, (SDKPassMethod)params[2], s_return.type, s_return.flags);
 	s_return.decflags = params[3];
 	s_return.encflags = params[4];
+
+	return 1;
+}
+
+// native void PrepSDKCall_SetReturnReg(SDKRegister reg);
+static cell_t PrepSDKCall_SetReturnReg(IPluginContext *pContext, const cell_t *params)
+{
+	s_has_regreturn = true;
+	s_has_return = false;
+	regreturn = (SDKRegister)params[1];
 
 	return 1;
 }
@@ -253,14 +272,26 @@ static cell_t PrepSDKCall_AddParameter(IPluginContext *pContext, const cell_t *p
 	return 1;
 }
 
+// native PrepSDKCall_AddRegParameter(SDKRegister reg);
+static cell_t PrepSDKCall_AddRegParameter(IPluginContext *pContext, const cell_t *params)
+{
+	if (!s_reginfo.Add((SDKRegister)params[1]))
+	{
+		return pContext->ThrowNativeError("Unknowen register enum %i or already setted", params[1]);
+	}
+	s_has_reginfo = true;
+
+	return 1;
+}
+
 static cell_t EndPrepSDKCall(IPluginContext *pContext, const cell_t *params)
 {
 	ValveCall *vc = NULL;
 	if (s_vtbl_index > -1)
 	{
-		vc = CreateValveVCall(s_vtbl_index, s_vcalltype, s_has_return ? &s_return : NULL, s_params, s_numparams);
+		vc = CreateValveVCall(s_vtbl_index, s_vcalltype, s_has_return ? &s_return : NULL, s_params, s_numparams, s_has_reginfo ? &s_reginfo : NULL, s_has_regreturn ? &regreturn : NULL);
 	} else if (s_call_addr) {
-		vc = CreateValveCall(s_call_addr, s_vcalltype, s_has_return ? &s_return : NULL, s_params, s_numparams);
+		vc = CreateValveCall(s_call_addr, s_vcalltype, s_has_return ? &s_return : NULL, s_params, s_numparams, s_has_reginfo ? &s_reginfo : NULL, s_has_regreturn ? &regreturn : NULL);
 	}
 
 	if (!vc)
@@ -280,6 +311,19 @@ static cell_t EndPrepSDKCall(IPluginContext *pContext, const cell_t *params)
 	}
 
 	return hndl;
+}
+
+// native void SDKCall_SetRegParameter(SDKRegister reg, any value);
+static cell_t SDKCall_SetRegParameter(IPluginContext *pContext, const cell_t *params)
+{
+	switch ((SDKRegister)params[1])
+	{
+	case SDKReg_XMM3: s_regs.xmm3 = *(float *)&params[2]; break;
+		
+	default: return pContext->ThrowNativeError("Unknowen register enum %i", params[1]);
+	}
+
+	return 1;
 }
 
 static cell_t SDKCall(IPluginContext *pContext, const cell_t *params)
@@ -411,8 +455,61 @@ static cell_t SDKCall(IPluginContext *pContext, const cell_t *params)
 		}
 	}
 
+	if (vc->reginfo)
+	{
+		if (vc->reginfo->has_xmm)
+		{
+			if (vc->reginfo->has_xmm0)
+			{
+				__asm movss xmm0, s_regs.xmm0;
+			}
+			if (vc->reginfo->has_xmm1)
+			{
+				__asm movss xmm1, s_regs.xmm1;
+			}
+			if (vc->reginfo->has_xmm2)
+			{
+				__asm movss xmm2, s_regs.xmm2;
+			}
+			if (vc->reginfo->has_xmm3)
+			{
+				__asm movss xmm3, s_regs.xmm3;
+			}
+			if (vc->reginfo->has_xmm4)
+			{
+				__asm movss xmm4, s_regs.xmm4;
+			}
+			if (vc->reginfo->has_xmm5)
+			{
+				__asm movss xmm5, s_regs.xmm5;
+			}
+			if (vc->reginfo->has_xmm6)
+			{
+				__asm movss xmm6, s_regs.xmm6;
+			}
+			if (vc->reginfo->has_xmm7)
+			{
+				__asm movss xmm7, s_regs.xmm7;
+			}
+		}
+	}
+
+	cell_t ret_buf;
+
 	/* Make the actual call */
 	vc->call->Execute(ptr, vc->retbuf);
+
+	if (vc->regreturn)
+	{
+		switch (*vc->regreturn)
+		{
+		case SDKReg_ST:
+			__asm fstp ret_buf;
+			break;
+		default:
+			ret_buf = 0;
+		}
+	}
 
 	/* Do we need to copy anything back? */
 	if (will_copyback)
@@ -436,6 +533,11 @@ static cell_t SDKCall(IPluginContext *pContext, const cell_t *params)
 
 	/* Save stack once and for all */
 	vc->stk_put(ptr);
+
+	if (vc->regreturn)
+	{
+		return ret_buf;
+	}
 
 	/* Figure out how to decode the return information */
 	if (vc->retinfo)
@@ -512,8 +614,11 @@ sp_nativeinfo_t g_CallNatives[] =
 	{"PrepSDKCall_SetAddress",		PrepSDKCall_SetAddress},
 	{"PrepSDKCall_SetFromConf",		PrepSDKCall_SetFromConf},
 	{"PrepSDKCall_SetReturnInfo",	PrepSDKCall_SetReturnInfo},
+	{"PrepSDKCall_SetReturnReg",	PrepSDKCall_SetReturnReg},
 	{"PrepSDKCall_AddParameter",	PrepSDKCall_AddParameter},
+	{"PrepSDKCall_AddRegParameter",	PrepSDKCall_AddRegParameter},
 	{"EndPrepSDKCall",				EndPrepSDKCall},
+	{"SDKCall_SetRegParameter",		SDKCall_SetRegParameter},
 	{"SDKCall",						SDKCall},
 	{NULL,							NULL},
 };

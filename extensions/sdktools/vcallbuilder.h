@@ -35,6 +35,7 @@
 #include <sh_stack.h>
 #include <extensions/IBinTools.h>
 #include "vdecoder.h"
+#include "registers.h"
 
 using namespace SourceMod;
 
@@ -52,6 +53,8 @@ struct ValveCall
 	size_t stackEnd;							/**< End of the bintools stack */
 	unsigned char *retbuf;						/**< Return buffer */
 	SourceHook::CStack<unsigned char *> stk;	/**< Parameter stack */
+	ValveRegInfo *reginfo;
+	SDKRegister *regreturn;
 
 	unsigned char *stk_get();
 	void stk_put(unsigned char *ptr);
@@ -63,12 +66,16 @@ ValveCall *CreateValveVCall(unsigned int vtableIdx,
 							ValveCallType vcalltype,
 							const ValvePassInfo *retInfo,
 							const ValvePassInfo *params,
-							unsigned int numParams);
+							unsigned int numParams,
+							const ValveRegInfo *reginfo = NULL,
+							const SDKRegister *regreturn = NULL);
 
 ValveCall *CreateValveCall(void *addr,
 							ValveCallType vcalltype,
 							const ValvePassInfo *retInfo,
 							const ValvePassInfo *params,
-							unsigned int numParams);
+							unsigned int numParams,
+							const ValveRegInfo *reginfo = NULL,
+							const SDKRegister *regreturn = NULL);
 
 #endif //_INCLUDE_SOURCEMOD_VALVE_CALLER_H_

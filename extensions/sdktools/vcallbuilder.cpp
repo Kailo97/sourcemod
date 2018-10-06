@@ -40,6 +40,8 @@ ValveCall::ValveCall()
 	retinfo = NULL;
 	thisinfo = NULL;
 	retbuf = NULL;
+	reginfo = NULL;
+	regreturn = NULL;
 }
 
 ValveCall::~ValveCall()
@@ -56,6 +58,14 @@ ValveCall::~ValveCall()
 	}
 	delete [] retbuf;
 	delete [] vparams;
+	if (reginfo)
+	{
+		delete reginfo;
+	}
+	if (regreturn)
+	{
+		delete regreturn;
+	}
 }
 
 unsigned char *ValveCall::stk_get()
@@ -80,7 +90,9 @@ ValveCall *CreateValveCall(void *addr,
 						   ValveCallType vcalltype,
 						   const ValvePassInfo *retInfo,
 						   const ValvePassInfo *params,
-						   unsigned int numParams)
+						   unsigned int numParams,
+						   const ValveRegInfo *reginfo,
+						   const SDKRegister *regreturn)
 {
 	if (numParams > 32)
 	{
@@ -232,6 +244,16 @@ ValveCall *CreateValveCall(void *addr,
 	vc->stackSize = normSize + extraSize;
 	vc->stackEnd = normSize;
 
+	if (reginfo)
+	{
+		vc->reginfo = new ValveRegInfo(*reginfo);
+	}
+
+	if (regreturn)
+	{
+		vc->regreturn = new SDKRegister(*regreturn);
+	}
+
 	return vc;
 }
 
@@ -239,7 +261,9 @@ ValveCall *CreateValveVCall(unsigned int vtableIdx,
 							ValveCallType vcalltype,
 							const ValvePassInfo *retInfo,
 							const ValvePassInfo *params,
-							unsigned int numParams)
+							unsigned int numParams,
+							const ValveRegInfo *reginfo,
+							const SDKRegister *regreturn)
 {
 	if (numParams > 32)
 	{
@@ -369,6 +393,16 @@ ValveCall *CreateValveVCall(unsigned int vtableIdx,
 
 	vc->stackSize = normSize + extraSize;
 	vc->stackEnd = normSize;
+
+	if (reginfo)
+	{
+		vc->reginfo = new ValveRegInfo(*reginfo);
+	}
+
+	if (regreturn)
+	{
+		vc->regreturn = new SDKRegister(*regreturn);
+	}
 
 	return vc;
 }

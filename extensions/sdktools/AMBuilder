@@ -24,6 +24,7 @@ project.sources += [
   'hooks.cpp',
   'gamerulesnatives.cpp',
   'vstringtable.cpp',
+  'registers.cpp',
   '../../public/smsdk_ext.cpp',
   '../../public/CDetour/detours.cpp',
   '../../public/asm/asm.c',
